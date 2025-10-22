@@ -20,7 +20,7 @@ module.exports = {
       name: "GlaceYT",
       password: process.env.LAVALINK_PASSWORD || "glace",
       host: "lavalink",
-      port:  11642,
+      port:  2333,
       secure: false
     }
   ]
