@@ -17,10 +17,10 @@ module.exports = {
    nodes: [
         {
             name: "main",
-            host: "lavalink.devamop.in",
-            port: 80,
-            password: "DevamOP",
-            secure: false
+            host: "lava.cantdosound.eu.org",
+            port: 443,
+            password: "CDS",
+            secure: true
         }
     ]
 };
