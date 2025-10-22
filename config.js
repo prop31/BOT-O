@@ -18,9 +18,9 @@ module.exports = {
   nodes: [
      {
       name: "GlaceYT",
-      password: process.env.LAVALINK_PASSWORD || "glace",
-      host: "lavalink",
-      port:  2333,
+      password: "glace",
+      host: "127.0.0.1",
+      port:  8080,
       secure: false
     }
   ]
