@@ -1,91 +1,99 @@
-// player.js
-const { Riffy } = require('riffy');
-const { EmbedBuilder } = require('discord.js');
-const config = require('./config.js');
+const { Riffy } = require("riffy");
+const { EmbedBuilder } = require("discord.js");
 
 function initializePlayer(client) {
-    // สร้าง Riffy instance
-    const nodes = config.nodes || [
-    {
-        host: 'lava-v3.ajieblogs.eu.org',
-            port: config.LAVALINK_PORT || 2333,
-            password: config.LAVALINK_PASSWORD || 'youshallnotpass',
-            secure: config.LAVALINK_SECURE || false,
-            name: 'Main Node'
+    client.riffy = new Riffy(client, [
+        {
+            host: "lava-v3.ajieblogs.eu.org",
+            port: 443,
+            password: "https://dsc.gg/ajidevserver",
+            secure: true,
         }
-    ];
-
-    client.riffy = new Riffy(client, nodes, {
+    ], {
         send: (payload) => {
             const guild = client.guilds.cache.get(payload.d.guild_id);
             if (guild) guild.shard.send(payload);
         },
-        defaultSearchPlatform: 'ytmsearch',
-        restVersion: 'v4'
+        defaultSearchPlatform: "ytmsearch",
+        restVersion: "v4",
+        // เพิ่มตรงนี้เพื่อแก้ปัญหาค้าง
+        resume: true,
+        resumeKey: "riffy-resume",
+        resumeTimeout: 60,
+        reconnectTries: 5,
+        reconnectInterval: 5000,
     });
 
-    // Event: Track Start
-    client.riffy.on('trackStart', async (player, track) => {
-        console.log(`Now playing: ${track.info.title} in guild ${player.guildId}`);
+    // เพิ่ม Error Handlers
+    client.riffy.on("nodeConnect", node => {
+        console.log(`✅ Node "${node.name}" connected.`);
     });
 
-    // Event: Track End
-    client.riffy.on('trackEnd', async (player, track) => {
-        console.log(`Finished: ${track.info.title}`);
+    client.riffy.on("nodeError", (node, error) => {
+        console.log(`❌ Node "${node.name}" error: ${error.message}`);
     });
 
-    // Event: Queue End
-    client.riffy.on('queueEnd', async (player) => {
+    client.riffy.on("nodeReconnect", node => {
+        console.log(`🔄 Node "${node.name}" reconnecting...`);
+    });
+
+    // แก้ปัญหาค้าง - เพิ่ม Track Error Handler
+    client.riffy.on("trackError", (player, track, error) => {
+        console.log(`❌ Track error: ${error}`);
         const channel = client.channels.cache.get(player.textChannel);
         if (channel) {
-            const embed = new EmbedBuilder()
-                .setColor('#FF0000')
-                .setDescription('✅ Queue has ended. No more songs to play.');
-            
-            await channel.send({ embeds: [embed] });
+            channel.send("⚠️ เกิดข้อผิดพลาดในการเล่นเพลง กำลังข้ามไปเพลงถัดไป...");
         }
-        player.destroy();
+        if (player.queue.length > 0) {
+            player.stop();
+        }
     });
 
-    // Event: Player Create
-    client.riffy.on('playerCreate', (player) => {
-        console.log(`Player created for guild ${player.guildId}`);
+    // แก้ปัญหาค้าง - Track Stuck Handler
+    client.riffy.on("trackStuck", (player, track, threshold) => {
+        console.log(`⚠️ Track stuck: ${track.info.title}`);
+        const channel = client.channels.cache.get(player.textChannel);
+        if (channel) {
+            channel.send("⚠️ เพลงค้าง กำลังข้ามไปเพลงถัดไป...");
+        }
+        player.stop();
     });
 
-    // Event: Player Destroy
-    client.riffy.on('playerDestroy', (player) => {
-        console.log(`Player destroyed for guild ${player.guildId}`);
+    // Track End - เล่นเพลงต่อไป
+    client.riffy.on("trackEnd", async (player, track) => {
+        const channel = client.channels.cache.get(player.textChannel);
+        if (player.queue.length > 0) {
+            player.play();
+        } else {
+            if (channel) {
+                channel.send("✅ เล่นเพลงในคิวหมดแล้ว");
+            }
+            player.destroy();
+        }
     });
 
-    // Event: Node Connect
-    client.riffy.on('nodeConnect', (node) => {
-        console.log(`Node "${node.name}" connected`);
-    });
-
-    // Event: Node Disconnect
-    client.riffy.on('nodeDisconnect', (node) => {
-        console.log(`Node "${node.name}" disconnected`);
-    });
-
-    // Event: Node Error
-    client.riffy.on('nodeError', (node, error) => {
-        console.error(`Node "${node.name}" error:`, error);
-    });
-
-    // Event: Track Error
-    client.riffy.on('trackError', (player, track, error) => {
-        console.error(`Error playing ${track.info.title}:`, error);
+    // เล่นเพลงเริ่มต้น
+    client.riffy.on("trackStart", async (player, track) => {
         const channel = client.channels.cache.get(player.textChannel);
         if (channel) {
             const embed = new EmbedBuilder()
-                .setColor('#FF0000')
-                .setDescription(`❌ Error playing: **${track.info.title}**`);
+                .setColor("#2f3136")
+                .setTitle("🎵 กำลังเล่น")
+                .setDescription(`**[${track.info.title}](${track.info.uri})**`)
+                .addFields(
+                    { name: "ระยะเวลา", value: formatTime(track.info.length), inline: true },
+                    { name: "ผู้ขอเพลง", value: `<@${track.info.requester}>`, inline: true }
+                )
+                .setThumbnail(track.info.thumbnail);
             channel.send({ embeds: [embed] });
         }
     });
+}
 
-    console.log('✅ Riffy player initialized successfully');
+function formatTime(ms) {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = ((ms % 60000) / 1000).toFixed(0);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 }
 
 module.exports = { initializePlayer };
-
