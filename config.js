@@ -17,11 +17,10 @@ module.exports = {
   // ลอง Lavalink Server อื่น
   nodes: [
     {
-      name: "Jirayu Node",
-      host: "lavalink.jirayu.net",
-      port: 13592,
-      password: "youshallnotpass",
-      secure: false
+        name: "main",
+        host: "lava-v3.ajieblogs.eu.org",
+        port: 443,
+        password: "https://dsc.gg/ajidevserver",
+        secure: true
     }
-  ]
-};
+]
