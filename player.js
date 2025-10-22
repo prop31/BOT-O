@@ -4,9 +4,9 @@ const { EmbedBuilder } = require("discord.js");
 function initializePlayer(client) {
     client.riffy = new Riffy(client, [
         {
-            host: "lava.cantdosound.eu.org",
+            host: "lava-v3.ajieblogs.eu.org",
             port: 443,
-            password: "CDS",
+            password: "https://dsc.gg/ajidevserver",
             secure: true,
         }
     ], {
@@ -97,6 +97,7 @@ function formatTime(ms) {
 }
 
 module.exports = { initializePlayer };
+
 
 
 
