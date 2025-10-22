@@ -17,9 +17,9 @@ module.exports = {
    nodes: [
         {
             name: "main",
-            host: "lava.cantdosound.eu.org",
+            host: "lava-v3.ajieblogs.eu.org",
             port: 443,
-            password: "CDS",
+            password: "https://dsc.gg/ajidevserver",
             secure: true
         }
     ]
