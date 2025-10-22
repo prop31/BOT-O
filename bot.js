@@ -16,6 +16,14 @@ const client = new Client({
 client.config = config;
 initializePlayer(client);
 
+client.riffy.on("nodeConnect", node => {
+    console.log(`${colors.cyan}[ NODE ]${colors.reset} ${colors.green}Connected to ${node.name} ✅${colors.reset}`);
+});
+
+client.riffy.on("nodeError", (node, error) => {
+    console.log(`${colors.cyan}[ NODE ]${colors.reset} ${colors.red}Error: ${error.message} ❌${colors.reset}`);
+});
+
 client.on("ready", () => {
     console.log(`${colors.cyan}[ SYSTEM ]${colors.reset} ${colors.green}Client logged as ${colors.yellow}${client.user.tag}${colors.reset}`);
     console.log(`${colors.cyan}[ MUSIC ]${colors.reset} ${colors.green}Riffy Music System Ready 🎵${colors.reset}`);
