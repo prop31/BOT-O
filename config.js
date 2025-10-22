@@ -17,7 +17,7 @@ module.exports = {
   // ลอง Lavalink Server อื่น
   nodes: [
     {
-      name: "Lavalink 1",
+      name: "Jirayu Node",
       host: "lavalink.jirayu.net",
       port: 13592,
       password: "youshallnotpass",
