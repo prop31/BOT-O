@@ -23,4 +23,5 @@ module.exports = {
         password: "https://dsc.gg/ajidevserver",
         secure: true
     }
-]
+  ]
+}; // ⬅️ เพิ่มตรงนี้ (ปิด module.exports)
