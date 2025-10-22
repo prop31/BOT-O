@@ -16,11 +16,11 @@ module.exports = {
   
    nodes: [
         {
-            name: "Indonesia",
-            host: "lavalinkv3-id.serenetia.com",
-            port: 443,
-            password: "BatuManaBisa",
-            secure: true
+            name: "Japan",
+            host: "lava.link",
+            port: 80,
+            password: "anything",
+            secure: false
         }
     ]
 };
