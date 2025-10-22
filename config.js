@@ -1,5 +1,3 @@
-
-
 module.exports = {
   TOKEN: "",
   language: "en",
@@ -9,22 +7,21 @@ module.exports = {
   spotifyClientSecret : "",
   setupFilePath: './commands/setup.json',
   commandsDir: './commands',  
-  embedColor: "#1db954",
+  embedColor: "#FF7A00",
   activityName: "YouTube Music", 
-  activityType: "LISTENING",  // Available activity types : LISTENING , PLAYING
-  SupportServer: "https://discord.gg/xQF9f9yUEM",
-  embedTimeout: 5, 
-  errorLog: "", 
+  activityType: "LISTENING",
+  SupportServer: "https://discord.gg/9wtkFbF5C5",
+  embedTimeout: 15,
+  errorLog: "",
+  
+  // แก้ไขส่วนนี้ - ใช้ Lavalink Server สาธารณะ
   nodes: [
-     {
-      name: "GlaceYT",
-      password: "glace",
-      host: "127.0.0.1",
-      port:  8080,
-      secure: false
-     }
-    ],
-    SupportServer: "https://discord.gg/9wtkFbF5C5",
-    embedColor: "#FF7A00",
-    embedTimeout: 15
+    {
+      name: "Main Node",
+      password: "https://dsc.gg/ajidevserver",
+      host: "lava-v3.ajieblogs.eu.org",
+      port: 443,
+      secure: true
+    }
+  ]
 };
