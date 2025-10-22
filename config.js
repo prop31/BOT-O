@@ -17,10 +17,10 @@ module.exports = {
   // ลอง Lavalink Server อื่น
   nodes: [
     {
-        name: "main",
-        host: "lava-v3.ajieblogs.eu.org",
+        name: "Singapore",
+        host: "lavalink-sg.serenetia.com",
         port: 443,
-        password: "https://dsc.gg/ajidevserver",
+        password: "BatuManaBisa",
         secure: true
     }
   ]
