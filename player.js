@@ -4,10 +4,10 @@ const { EmbedBuilder } = require("discord.js");
 function initializePlayer(client) {
     client.riffy = new Riffy(client, [
         {
-            host: "lavalinkv3-id.serenetia.com",
-            port: 443,
-            password: "BatuManaBisa",
-            secure: true,
+            host: "lava.link",
+            port: 80,
+            password: "anything",
+            secure: false,
         }
     ], {
         send: (payload) => {
@@ -97,5 +97,6 @@ function formatTime(ms) {
 }
 
 module.exports = { initializePlayer };
+
 
 
