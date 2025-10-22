@@ -16,10 +16,10 @@ module.exports = {
   
    nodes: [
         {
-            name: "Japan",
-            host: "lava.link",
+            name: "main",
+            host: "lavalink.devamop.in",
             port: 80,
-            password: "anything",
+            password: "DevamOP",
             secure: false
         }
     ]
