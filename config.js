@@ -14,14 +14,14 @@ module.exports = {
   embedTimeout: 15,
   errorLog: "",
   
-  // แก้ไขส่วนนี้ - ใช้ Lavalink Server สาธารณะ
+  // ลอง Lavalink Server อื่น
   nodes: [
     {
-      name: "Main Node",
-      password: "https://dsc.gg/ajidevserver",
-      host: "lava-v3.ajieblogs.eu.org",
-      port: 443,
-      secure: true
+      name: "Lavalink 1",
+      host: "lavalink.jirayu.net",
+      port: 13592,
+      password: "youshallnotpass",
+      secure: false
     }
   ]
 };
