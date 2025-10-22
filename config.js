@@ -14,14 +14,14 @@ module.exports = {
   embedTimeout: 15,
   errorLog: "",
   
-  nodes: [
-    {
-        name: "Indonesia",
-        host: "lavalinkv3-id.serenetia.com",
-        port: 443,
-        password: "BatuManaBisa",
-        secure: true,
-        path: "/lavalink" // ถ้า provider กำหนด
-    }
-];
+   nodes: [
+        {
+            name: "Indonesia",
+            host: "lavalinkv3-id.serenetia.com",
+            port: 443,
+            password: "BatuManaBisa",
+            secure: true
+        }
+    ]
+};
 
