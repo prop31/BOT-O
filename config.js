@@ -14,7 +14,6 @@ module.exports = {
   embedTimeout: 15,
   errorLog: "",
   
-  // ลอง Lavalink Server อื่น
   nodes: [
     {
         name: "Singapore",
