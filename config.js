@@ -24,4 +24,4 @@ module.exports = {
         secure: true
     }
   ]
-}; // ⬅️ เพิ่มตรงนี้ (ปิด module.exports)
+}
