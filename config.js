@@ -17,10 +17,10 @@ module.exports = {
    nodes: [
         {
             name: "main",
-            host: "lavalinkv4.serenetia.com",
-            port: 443,
-            password: "https://dsc.gg/ajidevserver",
-            secure: true
+            host: "pnode1.danbot.host",
+            port: 1351,
+            password: "cocaine",
+            secure: false
         }
     ]
 };
