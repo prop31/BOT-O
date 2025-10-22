@@ -20,7 +20,8 @@ module.exports = {
         host: "lavalinkv3-id.serenetia.com",
         port: 443,
         password: "BatuManaBisa",
-        secure: true
+        secure: true,
+        path: "/lavalink" // ถ้า provider กำหนด
     }
-  ]
-};
+];
+
