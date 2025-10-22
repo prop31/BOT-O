@@ -22,6 +22,9 @@ module.exports = {
       host: "127.0.0.1",
       port:  8080,
       secure: false
-    }
-  ]
-}
+     }
+    ],
+    SupportServer: "https://discord.gg/9wtkFbF5C5",
+    embedColor: "#FF7A00",
+    embedTimeout: 15
+};
