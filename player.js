@@ -5,9 +5,9 @@ const config = require('./config.js');
 
 function initializePlayer(client) {
     // สร้าง Riffy instance
-    const nodes = [
-        {
-            host: config.LAVALINK_HOST || 'localhost',
+    const nodes = config.nodes || [
+    {
+        host: 'lava-v3.ajieblogs.eu.org',
             port: config.LAVALINK_PORT || 2333,
             password: config.LAVALINK_PASSWORD || 'youshallnotpass',
             secure: config.LAVALINK_SECURE || false,
@@ -88,3 +88,4 @@ function initializePlayer(client) {
 }
 
 module.exports = { initializePlayer };
+
