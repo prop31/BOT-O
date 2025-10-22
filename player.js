@@ -4,9 +4,9 @@ const { EmbedBuilder } = require("discord.js");
 function initializePlayer(client) {
     client.riffy = new Riffy(client, [
         {
-            host: "lava.link",
+            host: "lavalink.devamop.in",
             port: 80,
-            password: "anything",
+            password: "DevamOP",
             secure: false,
         }
     ], {
@@ -97,6 +97,7 @@ function formatTime(ms) {
 }
 
 module.exports = { initializePlayer };
+
 
 
 
