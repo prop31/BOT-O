@@ -16,8 +16,8 @@ module.exports = {
   
   nodes: [
     {
-        name: "Singapore",
-        host: "lavalink-sg.serenetia.com",
+        name: "Indonesia",
+        host: "lavalinkv3-id.serenetia.com",
         port: 443,
         password: "BatuManaBisa",
         secure: true
