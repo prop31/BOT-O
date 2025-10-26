@@ -1,88 +1,107 @@
-async run(client, interaction) {
-    try {
-        const query = interaction.options.getString("query");
-        
-        // ตรวจสอบว่าผู้ใช้อยู่ใน voice channel
-        const member = interaction.guild.members.cache.get(interaction.user.id);
-        const voiceChannel = member.voice.channel;
-        
-        if (!voiceChannel) {
-            return interaction.reply("❌ คุณต้องอยู่ใน Voice Channel ก่อน!");
+const { Riffy } = require("riffy");
+const { EmbedBuilder } = require("discord.js");
+
+function initializePlayer(client) {
+    client.riffy = new Riffy(client, [
+        {
+            host: "pnode1.danbot.host",
+            port: 1351,
+            password: "cocaine",
+            secure: false,
         }
+    ], {
+        send: (payload) => {
+            const guild = client.guilds.cache.get(payload.d.guild_id);
+            if (guild) guild.shard.send(payload);
+        },
+        defaultSearchPlatform: "ytmsearch",
+        restVersion: "v4",
+        resume: true,
+        resumeKey: "riffy-resume",
+        resumeTimeout: 60,
+        reconnectTries: 5,
+        reconnectInterval: 5000,
+    });
 
-        await interaction.deferReply();
+    // Node Events
+    client.riffy.on("nodeConnect", node => {
+        console.log(`✅ Node "${node.name}" connected.`);
+    });
 
-        // สร้างหรือดึง player
-        let player = client.riffy.players.get(interaction.guild.id);
-        
-        if (!player) {
-            player = client.riffy.create({
-                guild: interaction.guild.id,
-                voiceChannel: voiceChannel.id,
-                textChannel: interaction.channel.id,
-                volume: 50,
-                selfDeafen: true,
-            });
+    client.riffy.on("nodeError", (node, error) => {
+        console.log(`❌ Node "${node.name}" error: ${error.message}`);
+    });
+
+    client.riffy.on("nodeReconnect", node => {
+        console.log(`🔄 Node "${node.name}" reconnecting...`);
+    });
+
+    // Track Events
+    client.riffy.on("trackError", (player, track, error) => {
+        console.log(`❌ Track error: ${error}`);
+        const channel = client.channels.cache.get(player.textChannel);
+        if (channel) {
+            channel.send("⚠️ เกิดข้อผิดพลาดในการเล่นเพลง กำลังข้ามไปเพลงถัดไป...");
         }
-
-        // **แก้ไขตรงนี้ - เพิ่มการจัดการข้อผิดพลาด**
-        let resolve;
-        try {
-            resolve = await client.riffy.resolve({ 
-                query: query,
-                requester: interaction.user.id 
-            });
-        } catch (error) {
-            console.error("Resolve error:", error);
-            return interaction.editReply("❌ ไม่สามารถค้นหาเพลงได้ กรุณาลองใหม่อีกครั้ง");
+        if (player.queue.length > 0) {
+            player.stop();
         }
+    });
 
-        // ตรวจสอบผลลัพธ์
-        if (!resolve || !resolve.tracks || resolve.tracks.length === 0) {
-            return interaction.editReply("❌ ไม่พบเพลงที่คุณค้นหา");
+    client.riffy.on("trackStuck", (player, track, threshold) => {
+        console.log(`⚠️ Track stuck: ${track.info.title}`);
+        const channel = client.channels.cache.get(player.textChannel);
+        if (channel) {
+            channel.send("⚠️ เพลงค้าง กำลังข้ามไปเพลงถัดไป...");
         }
+        player.stop();
+    });
 
-        // ตรวจสอบ loadType
-        if (resolve.loadType === "error") {
-            return interaction.editReply("❌ เกิดข้อผิดพลาดในการโหลดเพลง");
-        }
-
-        if (resolve.loadType === "empty") {
-            return interaction.editReply("❌ ไม่พบผลลัพธ์");
-        }
-
-        // เพิ่มเพลงลงคิว
-        if (resolve.loadType === "playlist") {
-            for (const track of resolve.tracks) {
-                track.info.requester = interaction.user.id;
-                player.queue.push(track);
-            }
-
-            if (!player.playing && !player.paused) {
-                player.play();
-            }
-
-            return interaction.editReply(`✅ เพิ่ม **${resolve.tracks.length}** เพลงจาก Playlist: **${resolve.playlistInfo.name}**`);
+    client.riffy.on("trackEnd", async (player, track) => {
+        const channel = client.channels.cache.get(player.textChannel);
+        if (player.queue.length > 0) {
+            player.play();
         } else {
-            // เพลงเดี่ยว
-            const track = resolve.tracks[0];
-            track.info.requester = interaction.user.id;
-            player.queue.push(track);
-
-            if (!player.playing && !player.paused) {
-                player.play();
-            } else {
-                return interaction.editReply(`✅ เพิ่มเพลง **${track.info.title}** ลงในคิว`);
+            if (channel) {
+                channel.send("✅ เล่นเพลงในคิวหมดแล้ว");
             }
+            player.destroy();
         }
+    });
 
-    } catch (error) {
-        console.error("Play command error:", error);
-        
-        if (interaction.deferred || interaction.replied) {
-            return interaction.editReply("❌ เกิดข้อผิดพลาดในการเล่นเพลง");
-        } else {
-            return interaction.reply("❌ เกิดข้อผิดพลาดในการเล่นเพลง");
+    client.riffy.on("trackStart", async (player, track) => {
+        const channel = client.channels.cache.get(player.textChannel);
+        if (channel) {
+            const embed = new EmbedBuilder()
+                .setColor("#2f3136")
+                .setTitle("🎵 กำลังเล่น")
+                .setDescription(`**[${track.info.title}](${track.info.uri})**`)
+                .addFields(
+                    { name: "ระยะเวลา", value: formatTime(track.info.length), inline: true },
+                    { name: "ผู้ขอเพลง", value: `<@${track.info.requester}>`, inline: true }
+                )
+                .setThumbnail(track.info.thumbnail);
+            channel.send({ embeds: [embed] });
         }
-    }
+    });
+
+    client.riffy.on("queueEnd", (player) => {
+        const channel = client.channels.cache.get(player.textChannel);
+        if (channel) {
+            channel.send("✅ เล่นเพลงในคิวหมดแล้ว");
+        }
+        setTimeout(() => {
+            if (player && !player.playing) {
+                player.destroy();
+            }
+        }, 5000);
+    });
 }
+
+function formatTime(ms) {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = ((ms % 60000) / 1000).toFixed(0);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+}
+
+module.exports = { initializePlayer };
