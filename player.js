@@ -1,53 +1,84 @@
-const { Kazagumo, KazagumoPlayer } = require("kazagumo");
-const { Connectors } = require("kazagumo");
-const { EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 
-function initializePlayer(client) {
-    client.kazagumo = new Kazagumo({
-        defaultSearchEngine: "youtube",
-        send: (guildId, payload) => {
-            const guild = client.guilds.cache.get(guildId);
-            if (guild) guild.shard.send(payload);
-        }
-    }, new Connectors.DiscordJS(client), [
-        {
-            name: "main",
-            url: "lava.link:80",
-            auth: "anything",
-            secure: false
-        }
-    ]);
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName("play")
+        .setDescription("เล่นเพลงจาก YouTube")
+        .addStringOption(option =>
+            option.setName("query")
+                .setDescription("ชื่อเพลงหรือ URL")
+                .setRequired(true)
+        ),
 
-    client.kazagumo.on("playerStart", (player, track) => {
-        const channel = client.channels.cache.get(player.textId);
-        if (channel) {
-            const embed = new EmbedBuilder()
-                .setColor("#2ecc71")
-                .setTitle("🎵 กำลังเล่น")
-                .setDescription(`**[${track.title}](${track.uri})**`)
-                .addFields(
-                    { name: "⏱️ ระยะเวลา", value: formatTime(track.length), inline: true },
-                    { name: "👤 ผู้ขอเพลง", value: `<@${track.requester}>`, inline: true }
-                )
-                .setThumbnail(track.thumbnail || null);
-            channel.send({ embeds: [embed] });
-        }
-    });
+    async run(client, interaction) {
+        try {
+            const query = interaction.options.getString("query");
+            const voiceChannel = interaction.member?.voice?.channel;
+            
+            if (!voiceChannel) {
+                return interaction.reply({ 
+                    content: "❌ คุณต้องอยู่ใน Voice Channel ก่อน!", 
+                    ephemeral: true 
+                });
+            }
 
-    client.kazagumo.on("playerEnd", (player) => {
-        if (player.queue.size === 0) {
-            const channel = client.channels.cache.get(player.textId);
-            if (channel) channel.send("✅ เล่นเพลงในคิวหมดแล้ว");
-            setTimeout(() => player.destroy(), 3000);
-        }
-    });
+            await interaction.deferReply();
 
-    client.kazagumo.on("playerError", (player, error) => {
-        console.error("Player error:", error);
-        const channel = client.channels.cache.get(player.textId);
-        if (channel) channel.send("❌ เกิดข้อผิดพลาดในการเล่นเพลง");
-    });
-}
+            const player = client.manager.create({
+                guild: interaction.guild.id,
+                voiceChannel: voiceChannel.id,
+                textChannel: interaction.channel.id,
+                selfDeafen: true,
+            });
+
+            if (!player.connected) player.connect();
+
+            const res = await client.manager.search(query, interaction.user);
+
+            if (res.loadType === "error" || res.loadType === "empty") {
+                if (!player.queue.current) player.destroy();
+                return interaction.editReply("❌ ไม่พบเพลงที่คุณค้นหา");
+            }
+
+            if (res.loadType === "playlist") {
+                player.queue.add(res.tracks);
+                
+                const embed = new EmbedBuilder()
+                    .setColor("#9b59b6")
+                    .setTitle("📋 เพิ่ม Playlist")
+                    .setDescription(`**${res.playlist.name}**`)
+                    .addFields(
+                        { name: "📊 จำนวนเพลง", value: `${res.tracks.length} เพลง`, inline: true },
+                        { name: "👤 ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true }
+                    )
+                    .setTimestamp();
+
+                if (!player.playing && !player.paused) player.play();
+                return interaction.editReply({ embeds: [embed] });
+            } else {
+                const track = res.tracks[0];
+                player.queue.add(track);
+
+                const embed = new EmbedBuilder()
+                    .setColor(player.playing ? "#3498db" : "#2ecc71")
+                    .setTitle(player.playing ? "➕ เพิ่มเพลงลงคิว" : "🎵 กำลังเล่น")
+                    .setDescription(`**[${track.title}](${track.uri})**`)
+                    .addFields(
+                        { name: "⏱️ ระยะเวลา", value: formatTime(track.duration), inline: true },
+                        { name: "👤 ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true }
+                    )
+                    .setThumbnail(track.thumbnail || null)
+                    .setTimestamp();
+
+                if (!player.playing && !player.paused) player.play();
+                return interaction.editReply({ embeds: [embed] });
+            }
+        } catch (error) {
+            console.error("Play error:", error);
+            return interaction.editReply("❌ เกิดข้อผิดพลาด");
+        }
+    }
+};
 
 function formatTime(ms) {
     if (!ms || ms === 0) return "🔴 LIVE";
@@ -59,5 +90,3 @@ function formatTime(ms) {
     }
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
-
-module.exports = { initializePlayer };
