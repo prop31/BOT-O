@@ -1,107 +1,170 @@
-const { Riffy } = require("riffy");
-const { EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 
-function initializePlayer(client) {
-    client.riffy = new Riffy(client, [
-        {
-            host: "pnode1.danbot.host",
-            port: 1351,
-            password: "cocaine",
-            secure: false,
-        }
-    ], {
-        send: (payload) => {
-            const guild = client.guilds.cache.get(payload.d.guild_id);
-            if (guild) guild.shard.send(payload);
-        },
-        defaultSearchPlatform: "ytmsearch",
-        restVersion: "v4",
-        resume: true,
-        resumeKey: "riffy-resume",
-        resumeTimeout: 60,
-        reconnectTries: 5,
-        reconnectInterval: 5000,
-    });
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName("play")
+        .setDescription("เล่นเพลงจาก YouTube")
+        .addStringOption(option =>
+            option.setName("query")
+                .setDescription("ชื่อเพลงหรือ URL")
+                .setRequired(true)
+        ),
 
-    // Node Events
-    client.riffy.on("nodeConnect", node => {
-        console.log(`✅ Node "${node.name}" connected.`);
-    });
-
-    client.riffy.on("nodeError", (node, error) => {
-        console.log(`❌ Node "${node.name}" error: ${error.message}`);
-    });
-
-    client.riffy.on("nodeReconnect", node => {
-        console.log(`🔄 Node "${node.name}" reconnecting...`);
-    });
-
-    // Track Events
-    client.riffy.on("trackError", (player, track, error) => {
-        console.log(`❌ Track error: ${error}`);
-        const channel = client.channels.cache.get(player.textChannel);
-        if (channel) {
-            channel.send("⚠️ เกิดข้อผิดพลาดในการเล่นเพลง กำลังข้ามไปเพลงถัดไป...");
-        }
-        if (player.queue.length > 0) {
-            player.stop();
-        }
-    });
-
-    client.riffy.on("trackStuck", (player, track, threshold) => {
-        console.log(`⚠️ Track stuck: ${track.info.title}`);
-        const channel = client.channels.cache.get(player.textChannel);
-        if (channel) {
-            channel.send("⚠️ เพลงค้าง กำลังข้ามไปเพลงถัดไป...");
-        }
-        player.stop();
-    });
-
-    client.riffy.on("trackEnd", async (player, track) => {
-        const channel = client.channels.cache.get(player.textChannel);
-        if (player.queue.length > 0) {
-            player.play();
-        } else {
-            if (channel) {
-                channel.send("✅ เล่นเพลงในคิวหมดแล้ว");
+    async run(client, interaction) {
+        try {
+            const query = interaction.options.getString("query");
+            
+            // ตรวจสอบ voice channel
+            const member = interaction.guild.members.cache.get(interaction.user.id);
+            const voiceChannel = member?.voice?.channel;
+            
+            if (!voiceChannel) {
+                return interaction.reply({ 
+                    content: "❌ คุณต้องอยู่ใน Voice Channel ก่อน!", 
+                    ephemeral: true 
+                });
             }
-            player.destroy();
-        }
-    });
 
-    client.riffy.on("trackStart", async (player, track) => {
-        const channel = client.channels.cache.get(player.textChannel);
-        if (channel) {
-            const embed = new EmbedBuilder()
-                .setColor("#2f3136")
-                .setTitle("🎵 กำลังเล่น")
-                .setDescription(`**[${track.info.title}](${track.info.uri})**`)
-                .addFields(
-                    { name: "ระยะเวลา", value: formatTime(track.info.length), inline: true },
-                    { name: "ผู้ขอเพลง", value: `<@${track.info.requester}>`, inline: true }
-                )
-                .setThumbnail(track.info.thumbnail);
-            channel.send({ embeds: [embed] });
-        }
-    });
+            await interaction.deferReply();
 
-    client.riffy.on("queueEnd", (player) => {
-        const channel = client.channels.cache.get(player.textChannel);
-        if (channel) {
-            channel.send("✅ เล่นเพลงในคิวหมดแล้ว");
-        }
-        setTimeout(() => {
-            if (player && !player.playing) {
-                player.destroy();
+            // สร้างหรือดึง player
+            let player = client.riffy.players.get(interaction.guild.id);
+            
+            if (!player) {
+                player = client.riffy.create({
+                    guild: interaction.guild.id,
+                    voiceChannel: voiceChannel.id,
+                    textChannel: interaction.channel.id,
+                    volume: 50,
+                    selfDeafen: true,
+                });
             }
-        }, 5000);
-    });
-}
+
+            // เชื่อมต่อ player ถ้ายังไม่ได้เชื่อม
+            if (!player.connected) {
+                player.connect();
+            }
+
+            // **แก้ไขส่วนนี้ - เพิ่ม try-catch และตรวจสอบข้อมูล**
+            let resolve;
+            
+            try {
+                resolve = await client.riffy.resolve({ 
+                    query: query,
+                    requester: interaction.user.id 
+                });
+
+                console.log("Resolve result:", JSON.stringify(resolve, null, 2)); // Debug log
+
+            } catch (resolveError) {
+                console.error("Resolve error details:", resolveError);
+                
+                // ลบ player ถ้าเกิด error
+                if (player && player.queue.length === 0) {
+                    player.destroy();
+                }
+                
+                return interaction.editReply({
+                    content: "❌ ไม่สามารถค้นหาเพลงได้ อาจเป็นเพราะ:\n" +
+                             "• Lavalink node ไม่พร้อมใช้งาน\n" +
+                             "• URL หรือคำค้นหาไม่ถูกต้อง\n" +
+                             "• บริการค้นหาเพลงมีปัญหา"
+                });
+            }
+
+            // ตรวจสอบว่า resolve มีข้อมูลหรือไม่
+            if (!resolve) {
+                if (player && player.queue.length === 0) {
+                    player.destroy();
+                }
+                return interaction.editReply("❌ ไม่สามารถค้นหาเพลงได้");
+            }
+
+            // ตรวจสอบ loadType
+            const { loadType, tracks, playlistInfo } = resolve;
+
+            if (loadType === "error" || loadType === "empty") {
+                if (player && player.queue.length === 0) {
+                    player.destroy();
+                }
+                return interaction.editReply("❌ ไม่พบเพลงที่คุณค้นหา");
+            }
+
+            // ตรวจสอบว่ามี tracks หรือไม่
+            if (!tracks || tracks.length === 0) {
+                if (player && player.queue.length === 0) {
+                    player.destroy();
+                }
+                return interaction.editReply("❌ ไม่พบเพลงที่คุณค้นหา");
+            }
+
+            // จัดการ Playlist
+            if (loadType === "playlist") {
+                for (const track of tracks) {
+                    track.info.requester = interaction.user.id;
+                    player.queue.push(track);
+                }
+
+                if (!player.playing && !player.paused) {
+                    player.play();
+                }
+
+                const embed = new EmbedBuilder()
+                    .setColor("#00FF00")
+                    .setTitle("✅ เพิ่ม Playlist")
+                    .setDescription(`**${playlistInfo?.name || 'Playlist'}**`)
+                    .addFields(
+                        { name: "จำนวนเพลง", value: `${tracks.length} เพลง`, inline: true },
+                        { name: "ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true }
+                    )
+                    .setTimestamp();
+
+                return interaction.editReply({ embeds: [embed] });
+            } 
+            // จัดการเพลงเดี่ยว
+            else {
+                const track = tracks[0];
+                track.info.requester = interaction.user.id;
+                player.queue.push(track);
+
+                const embed = new EmbedBuilder()
+                    .setColor("#00FF00")
+                    .setTitle("✅ เพิ่มเพลงลงคิว")
+                    .setDescription(`**[${track.info.title}](${track.info.uri})**`)
+                    .addFields(
+                        { name: "ระยะเวลา", value: formatTime(track.info.length), inline: true },
+                        { name: "ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true },
+                        { name: "ตำแหน่งในคิว", value: `#${player.queue.length}`, inline: true }
+                    )
+                    .setThumbnail(track.info.thumbnail)
+                    .setTimestamp();
+
+                if (!player.playing && !player.paused) {
+                    player.play();
+                    embed.setTitle("🎵 กำลังเล่น");
+                }
+
+                return interaction.editReply({ embeds: [embed] });
+            }
+
+        } catch (error) {
+            console.error("Play command error:", error);
+            console.error("Error stack:", error.stack);
+            
+            const errorMessage = "❌ เกิดข้อผิดพลาดในการเล่นเพลง\n" +
+                               `ข้อความ: ${error.message}`;
+            
+            if (interaction.deferred) {
+                return interaction.editReply({ content: errorMessage });
+            } else if (!interaction.replied) {
+                return interaction.reply({ content: errorMessage, ephemeral: true });
+            }
+        }
+    }
+};
 
 function formatTime(ms) {
     const minutes = Math.floor(ms / 60000);
     const seconds = ((ms % 60000) / 1000).toFixed(0);
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 }
-
-module.exports = { initializePlayer };
