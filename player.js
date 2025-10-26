@@ -22,69 +22,159 @@ module.exports = {
                 });
             }
 
+            // ตรวจสอบสิทธิ์
+            const permissions = voiceChannel.permissionsFor(interaction.client.user);
+            if (!permissions.has("Connect") || !permissions.has("Speak")) {
+                return interaction.reply({
+                    content: "❌ บอทไม่มีสิทธิ์เข้าร่วมหรือพูดใน Voice Channel นี้!",
+                    ephemeral: true
+                });
+            }
+
             await interaction.deferReply();
 
-            const player = client.manager.create({
-                guild: interaction.guild.id,
-                voiceChannel: voiceChannel.id,
-                textChannel: interaction.channel.id,
-                selfDeafen: true,
-            });
+            // สร้างหรือดึง player (ใช้ client.riffy แทน client.manager)
+            let player = client.riffy.players.get(interaction.guild.id);
+            
+            if (!player) {
+                player = client.riffy.create({
+                    guild: interaction.guild.id,
+                    voiceChannel: voiceChannel.id,
+                    textChannel: interaction.channel.id,
+                    volume: 50,
+                    selfDeafen: true,
+                });
+            }
 
-            if (!player.connected) player.connect();
+            // เชื่อมต่อ player
+            if (!player.connected) {
+                player.connect();
+            }
 
-            const res = await client.manager.search(query, interaction.user);
+            // ค้นหาเพลง (ใช้ client.riffy.resolve แทน client.manager.search)
+            let resolve;
+            
+            try {
+                resolve = await client.riffy.resolve({ 
+                    query: query,
+                    requester: interaction.user.id 
+                });
 
-            if (res.loadType === "error" || res.loadType === "empty") {
-                if (!player.queue.current) player.destroy();
+            } catch (resolveError) {
+                console.error("Resolve error:", resolveError);
+                
+                if (player && player.queue.length === 0) {
+                    player.destroy();
+                }
+                
+                return interaction.editReply({
+                    content: "❌ ไม่สามารถค้นหาเพลงได้\n" +
+                             "**สาเหตุที่เป็นไปได้:**\n" +
+                             "• Lavalink node ไม่พร้อมใช้งาน\n" +
+                             "• URL ไม่ถูกต้อง\n" +
+                             "• บริการค้นหามีปัญหา"
+                });
+            }
+
+            // ตรวจสอบผลลัพธ์
+            if (!resolve || !resolve.tracks || resolve.tracks.length === 0) {
+                if (player && player.queue.length === 0) {
+                    player.destroy();
+                }
                 return interaction.editReply("❌ ไม่พบเพลงที่คุณค้นหา");
             }
 
-            if (res.loadType === "playlist") {
-                player.queue.add(res.tracks);
-                
+            const { loadType, tracks, playlistInfo } = resolve;
+
+            // ตรวจสอบ loadType
+            if (loadType === "error" || loadType === "empty") {
+                if (player && player.queue.length === 0) {
+                    player.destroy();
+                }
+                return interaction.editReply("❌ ไม่พบเพลงที่คุณค้นหา");
+            }
+
+            // เพิ่ม Playlist
+            if (loadType === "playlist") {
+                for (const track of tracks) {
+                    track.info.requester = interaction.user.id;
+                    player.queue.push(track);
+                }
+
+                if (!player.playing && !player.paused) {
+                    player.play();
+                }
+
                 const embed = new EmbedBuilder()
                     .setColor("#9b59b6")
                     .setTitle("📋 เพิ่ม Playlist")
-                    .setDescription(`**${res.playlist.name}**`)
+                    .setDescription(`**${playlistInfo?.name || 'Playlist'}**`)
                     .addFields(
-                        { name: "📊 จำนวนเพลง", value: `${res.tracks.length} เพลง`, inline: true },
+                        { name: "📊 จำนวนเพลง", value: `${tracks.length} เพลง`, inline: true },
                         { name: "👤 ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true }
                     )
+                    .setFooter({ text: `คิวทั้งหมด: ${player.queue.length} เพลง` })
                     .setTimestamp();
 
-                if (!player.playing && !player.paused) player.play();
                 return interaction.editReply({ embeds: [embed] });
-            } else {
-                const track = res.tracks[0];
-                player.queue.add(track);
+            } 
+            // เพิ่มเพลงเดี่ยว
+            else {
+                const track = tracks[0];
+                track.info.requester = interaction.user.id;
+                player.queue.push(track);
 
+                const isPlaying = player.playing || player.paused;
+                
                 const embed = new EmbedBuilder()
-                    .setColor(player.playing ? "#3498db" : "#2ecc71")
-                    .setTitle(player.playing ? "➕ เพิ่มเพลงลงคิว" : "🎵 กำลังเล่น")
-                    .setDescription(`**[${track.title}](${track.uri})**`)
+                    .setColor(isPlaying ? "#3498db" : "#2ecc71")
+                    .setTitle(isPlaying ? "➕ เพิ่มเพลงลงคิว" : "🎵 กำลังเล่น")
+                    .setDescription(`**[${track.info.title}](${track.info.uri})**`)
                     .addFields(
-                        { name: "⏱️ ระยะเวลา", value: formatTime(track.duration), inline: true },
+                        { name: "⏱️ ระยะเวลา", value: formatTime(track.info.length), inline: true },
                         { name: "👤 ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true }
                     )
-                    .setThumbnail(track.thumbnail || null)
+                    .setThumbnail(track.info.thumbnail || null)
                     .setTimestamp();
 
-                if (!player.playing && !player.paused) player.play();
+                if (isPlaying) {
+                    embed.addFields({ 
+                        name: "📍 ตำแหน่งในคิว", 
+                        value: `#${player.queue.length}`, 
+                        inline: true 
+                    });
+                    embed.setFooter({ text: `คิวทั้งหมด: ${player.queue.length} เพลง` });
+                }
+
+                if (!isPlaying) {
+                    player.play();
+                }
+
                 return interaction.editReply({ embeds: [embed] });
             }
+
         } catch (error) {
-            console.error("Play error:", error);
-            return interaction.editReply("❌ เกิดข้อผิดพลาด");
+            console.error("Play command error:", error);
+            console.error("Error stack:", error.stack);
+            
+            const errorMessage = `❌ เกิดข้อผิดพลาด: ${error.message}`;
+            
+            if (interaction.deferred || interaction.replied) {
+                return interaction.editReply({ content: errorMessage }).catch(console.error);
+            } else {
+                return interaction.reply({ content: errorMessage, ephemeral: true }).catch(console.error);
+            }
         }
     }
 };
 
 function formatTime(ms) {
     if (!ms || ms === 0) return "🔴 LIVE";
+    
     const seconds = Math.floor((ms / 1000) % 60);
     const minutes = Math.floor((ms / (1000 * 60)) % 60);
     const hours = Math.floor(ms / (1000 * 60 * 60));
+    
     if (hours > 0) {
         return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
