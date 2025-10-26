@@ -15,13 +15,21 @@ module.exports = {
             const query = interaction.options.getString("query");
             
             // ตรวจสอบ voice channel
-            const member = interaction.guild.members.cache.get(interaction.user.id);
-            const voiceChannel = member?.voice?.channel;
+            const voiceChannel = interaction.member?.voice?.channel;
             
             if (!voiceChannel) {
                 return interaction.reply({ 
                     content: "❌ คุณต้องอยู่ใน Voice Channel ก่อน!", 
                     ephemeral: true 
+                });
+            }
+
+            // ตรวจสอบสิทธิ์
+            const permissions = voiceChannel.permissionsFor(interaction.client.user);
+            if (!permissions.has("Connect") || !permissions.has("Speak")) {
+                return interaction.reply({
+                    content: "❌ บอทไม่มีสิทธิ์เข้าร่วมหรือพูดใน Voice Channel นี้!",
+                    ephemeral: true
                 });
             }
 
@@ -40,12 +48,12 @@ module.exports = {
                 });
             }
 
-            // เชื่อมต่อ player ถ้ายังไม่ได้เชื่อม
+            // เชื่อมต่อ player
             if (!player.connected) {
                 player.connect();
             }
 
-            // **แก้ไขส่วนนี้ - เพิ่ม try-catch และตรวจสอบข้อมูล**
+            // ค้นหาเพลง
             let resolve;
             
             try {
@@ -54,35 +62,33 @@ module.exports = {
                     requester: interaction.user.id 
                 });
 
-                console.log("Resolve result:", JSON.stringify(resolve, null, 2)); // Debug log
-
             } catch (resolveError) {
-                console.error("Resolve error details:", resolveError);
+                console.error("Resolve error:", resolveError);
                 
-                // ลบ player ถ้าเกิด error
                 if (player && player.queue.length === 0) {
                     player.destroy();
                 }
                 
                 return interaction.editReply({
-                    content: "❌ ไม่สามารถค้นหาเพลงได้ อาจเป็นเพราะ:\n" +
+                    content: "❌ ไม่สามารถค้นหาเพลงได้\n" +
+                             "**สาเหตุที่เป็นไปได้:**\n" +
                              "• Lavalink node ไม่พร้อมใช้งาน\n" +
-                             "• URL หรือคำค้นหาไม่ถูกต้อง\n" +
-                             "• บริการค้นหาเพลงมีปัญหา"
+                             "• URL ไม่ถูกต้อง\n" +
+                             "• บริการค้นหามีปัญหา"
                 });
             }
 
-            // ตรวจสอบว่า resolve มีข้อมูลหรือไม่
-            if (!resolve) {
+            // ตรวจสอบผลลัพธ์
+            if (!resolve || !resolve.tracks || resolve.tracks.length === 0) {
                 if (player && player.queue.length === 0) {
                     player.destroy();
                 }
-                return interaction.editReply("❌ ไม่สามารถค้นหาเพลงได้");
+                return interaction.editReply("❌ ไม่พบเพลงที่คุณค้นหา");
             }
 
-            // ตรวจสอบ loadType
             const { loadType, tracks, playlistInfo } = resolve;
 
+            // ตรวจสอบ loadType
             if (loadType === "error" || loadType === "empty") {
                 if (player && player.queue.length === 0) {
                     player.destroy();
@@ -90,15 +96,7 @@ module.exports = {
                 return interaction.editReply("❌ ไม่พบเพลงที่คุณค้นหา");
             }
 
-            // ตรวจสอบว่ามี tracks หรือไม่
-            if (!tracks || tracks.length === 0) {
-                if (player && player.queue.length === 0) {
-                    player.destroy();
-                }
-                return interaction.editReply("❌ ไม่พบเพลงที่คุณค้นหา");
-            }
-
-            // จัดการ Playlist
+            // เพิ่ม Playlist
             if (loadType === "playlist") {
                 for (const track of tracks) {
                     track.info.requester = interaction.user.id;
@@ -110,38 +108,48 @@ module.exports = {
                 }
 
                 const embed = new EmbedBuilder()
-                    .setColor("#00FF00")
-                    .setTitle("✅ เพิ่ม Playlist")
+                    .setColor("#9b59b6")
+                    .setTitle("📋 เพิ่ม Playlist")
                     .setDescription(`**${playlistInfo?.name || 'Playlist'}**`)
                     .addFields(
-                        { name: "จำนวนเพลง", value: `${tracks.length} เพลง`, inline: true },
-                        { name: "ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true }
+                        { name: "📊 จำนวนเพลง", value: `${tracks.length} เพลง`, inline: true },
+                        { name: "👤 ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true }
                     )
+                    .setFooter({ text: `คิวทั้งหมด: ${player.queue.length} เพลง` })
                     .setTimestamp();
 
                 return interaction.editReply({ embeds: [embed] });
             } 
-            // จัดการเพลงเดี่ยว
+            // เพิ่มเพลงเดี่ยว
             else {
                 const track = tracks[0];
                 track.info.requester = interaction.user.id;
                 player.queue.push(track);
 
+                const isPlaying = player.playing || player.paused;
+                
                 const embed = new EmbedBuilder()
-                    .setColor("#00FF00")
-                    .setTitle("✅ เพิ่มเพลงลงคิว")
+                    .setColor(isPlaying ? "#3498db" : "#2ecc71")
+                    .setTitle(isPlaying ? "➕ เพิ่มเพลงลงคิว" : "🎵 กำลังเล่น")
                     .setDescription(`**[${track.info.title}](${track.info.uri})**`)
                     .addFields(
-                        { name: "ระยะเวลา", value: formatTime(track.info.length), inline: true },
-                        { name: "ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true },
-                        { name: "ตำแหน่งในคิว", value: `#${player.queue.length}`, inline: true }
+                        { name: "⏱️ ระยะเวลา", value: formatTime(track.info.length), inline: true },
+                        { name: "👤 ผู้ขอเพลง", value: `<@${interaction.user.id}>`, inline: true }
                     )
-                    .setThumbnail(track.info.thumbnail)
+                    .setThumbnail(track.info.thumbnail || null)
                     .setTimestamp();
 
-                if (!player.playing && !player.paused) {
+                if (isPlaying) {
+                    embed.addFields({ 
+                        name: "📍 ตำแหน่งในคิว", 
+                        value: `#${player.queue.length}`, 
+                        inline: true 
+                    });
+                    embed.setFooter({ text: `คิวทั้งหมด: ${player.queue.length} เพลง` });
+                }
+
+                if (!isPlaying) {
                     player.play();
-                    embed.setTitle("🎵 กำลังเล่น");
                 }
 
                 return interaction.editReply({ embeds: [embed] });
@@ -151,20 +159,26 @@ module.exports = {
             console.error("Play command error:", error);
             console.error("Error stack:", error.stack);
             
-            const errorMessage = "❌ เกิดข้อผิดพลาดในการเล่นเพลง\n" +
-                               `ข้อความ: ${error.message}`;
+            const errorMessage = `❌ เกิดข้อผิดพลาด: ${error.message}`;
             
-            if (interaction.deferred) {
-                return interaction.editReply({ content: errorMessage });
-            } else if (!interaction.replied) {
-                return interaction.reply({ content: errorMessage, ephemeral: true });
+            if (interaction.deferred || interaction.replied) {
+                return interaction.editReply({ content: errorMessage }).catch(console.error);
+            } else {
+                return interaction.reply({ content: errorMessage, ephemeral: true }).catch(console.error);
             }
         }
     }
 };
 
 function formatTime(ms) {
-    const minutes = Math.floor(ms / 60000);
-    const seconds = ((ms % 60000) / 1000).toFixed(0);
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    if (!ms || ms === 0) return "🔴 LIVE";
+    
+    const seconds = Math.floor((ms / 1000) % 60);
+    const minutes = Math.floor((ms / (1000 * 60)) % 60);
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    
+    if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
