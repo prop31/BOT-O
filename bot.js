@@ -19,9 +19,9 @@ client.config = config;
 // ย้ายโค้ด initializePlayer มาไว้ที่นี่เลย
 client.riffy = new Riffy(client, [
     {
-        host: "lava.link",
-        port: 80,
-        password: "anything",
+        host: "pnode1.danbot.host",
+        port: 1351,
+        password: "cocaine",
         secure: false,
     }
 ], {
